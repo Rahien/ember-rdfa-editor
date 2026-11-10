@@ -41,12 +41,12 @@ class IdleState implements PluginState {
     }
 
     /**
-     * If the placeholder was shown in the last state and slash was typed
-     * open context actions
+     * Open the context actions when a slash is typed at the start of a word.
+     * This works both in empty lines and inline, e.g. "during the discussion, /mandataris".
      */
     if (
-      shouldShowPlaceholder(oldState, getGroups) &&
-      transactionIsSlashTyped(tr)
+      transactionIsSlashTyped(tr) &&
+      canStartSlashCommand(oldState, getGroups)
     ) {
       const pos = newState.selection.$from.pos;
       return new SearchingState(oldState, pos, pos, '');
@@ -194,6 +194,30 @@ export function slashCommandsStateChanged(
 export const slashCommandsPluginKey = new PluginKey<PluginState>(
   'SLASH_COMMANDS_PLUGIN',
 );
+
+function canStartSlashCommand(
+  state: EditorState,
+  getGroups: GetContextualActionGroups,
+) {
+  const pluginState = getSlashCommandsPluginState(state);
+  if (pluginState?.menuOpen) return false;
+
+  const groups = getGroups.flatMap((getGroups) => getGroups(state));
+  if (groups.length === 0) return false;
+
+  const { selection } = state;
+  if (!selection.empty) return false;
+
+  const $from = selection.$from;
+  if (!$from.parent.isTextblock) return false;
+
+  const nodeBefore = $from.nodeBefore;
+  if (!nodeBefore) return true;
+  if (nodeBefore.isText) {
+    return /\s$/.test(nodeBefore.text ?? '');
+  }
+  return nodeBefore.type.name === 'hard_break';
+}
 
 function shouldShowPlaceholder(
   state: EditorState,
